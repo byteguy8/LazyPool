@@ -11,13 +11,13 @@ void _set_err_(int code, int *err)
     }
 }
 
-int _is_valid_ptr_(void *ptr, struct _lazysubpool_ *pool)
+int _is_valid_ptr_(void *ptr, struct _lazysubpool_ *subpool)
 {
     assert(ptr && "ptr can't be NULL");
-    assert(pool && "pool can't be NULL");
+    assert(subpool && "pool can't be NULL");
 
-    void *min_ptr = pool->slots + (sizeof(struct _lazyslot_) * pool->slot_count);
-    void *max_ptr = min_ptr + (pool->slot_size * (pool->slot_count - 1));
+    void *min_ptr = subpool->slots + (sizeof(struct _lazyslot_) * subpool->slot_count);
+    void *max_ptr = min_ptr + (subpool->slot_size * (subpool->slot_count - 1));
 
     return ptr >= min_ptr && ptr <= max_ptr;
 }
@@ -214,9 +214,10 @@ unsigned long _get_index_from_ptr_(void *ptr, struct _lazysubpool_ *subpool)
     assert(ptr && "ptr can't be NULL");
     assert(subpool && "subpool can't be NULL");
 
-    struct _lazyslot_ *last = _get_slot_(subpool->slot_count - 1, subpool);
+    void *min_ptr = subpool->slots + (sizeof(struct _lazyslot_) * subpool->slot_count);
+    void *max_ptr = min_ptr + (subpool->slot_size * (subpool->slot_count - 1));
 
-    return ((struct _lazyslot_ *)ptr) - last;
+    return (max_ptr - ptr) / subpool->slot_size;
 }
 
 void *_allocate_from_subpool_(struct _lazysubpool_ *subpool, int *err)
@@ -240,6 +241,7 @@ void *_allocate_from_subpool_(struct _lazysubpool_ *subpool, int *err)
     subpool->used_count += 1;
 
     _set_err_(LAZYPOOL_OK, err);
+
     return slot;
 }
 
@@ -468,6 +470,17 @@ void *lazypool_allocate(struct _lazypool_ *pool, int *err)
 
     // Allocating from the first subpool of the list of subpools with available space
     struct _lazysubpool_ *subpool = pool->free_subpools;
+
+    if (subpool->used_count == subpool->slot_count)
+    {
+        pool->free_subpools = subpool->next;
+
+        subpool->next = pool->used_subpools;
+        pool->used_subpools = subpool;
+
+        subpool = pool->free_subpools;
+    }
+
     void *ptr = _allocate_from_subpool_(subpool, err);
 
     // If we reach this point must be space avaible. So, we assert that

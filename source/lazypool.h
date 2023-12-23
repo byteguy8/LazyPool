@@ -1,4 +1,4 @@
-// LazyPool 1.0.0
+// LazyPool 1.0.1
 
 #ifndef _LAZYPOOL_H_
 #define _LAZYPOOL_H_
